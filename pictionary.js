@@ -1,6 +1,5 @@
 PLAYERS = ["Jason", "Matt", "Alex", "Allison", "Ganz", "David"];
 
-var context;
 var isMouseDown = false;
 var lastEvent;
 
@@ -16,6 +15,10 @@ MessageLevel.WARNING = "warning";
 MessageLevel.ERROR = "error";
 MessageLevel.OK = "ok";
 
+
+PictionaryModelEvent
+
+
 function log(s) {
 		window.console.log(s);
 }
@@ -23,28 +26,111 @@ function log(s) {
 function nowMs() {
 		return (new Date()).valueOf();
 }
-function PictionaryModel(players, canvasApp) {
+
+
+function PictionaryModelEvent(type, data) {
+		this.type = type;
+		this.data = data;
+}
+
+///////// PictionaryModel
+
+function PictionaryModel(root, players, canvasApp) {
 		this.players = players;
-		this.scores = {};
+		this.root = root;
 		for (var i=0;i<players.length;i++) { this.scores[players[i]] = 0; }
-		this.canvasApp = canvasApp;
-		this.state = STATE.START;
 		this.drawerIdx = 0;
-		this.startTurn(0);
 		this.timeLeft = MAX_TIME;
 		this.sessionKey = "1";
-		this.redraw();
 }
-/**
- * getCardType
- *
- * Returns a random card type.
- */
+
+PictionaryModel.prototype.players = [];
+PictionaryModel.prototype.scores = {};
+PictionaryModel.prototype.state = STATE.START;
+
+//////////// GETTERS
+
+PictionaryModel.prototype.getCurrentDrawer = function() {
+		return this.players[this.drawerIdx];
+}
+PictionaryModel.prototype.getCurrentCategory = function() {
+		return this.currentCategory;
+}
+PictionaryModel.prototype.getWinningPlayer = function() {
+		return this.winningPlayer;
+}
+//private
 PictionaryModel.prototype.getCardType = function() {
 		var types = ["Person/Place/Thing", "Difficult", "All Play", "Object", "Action", "Pick"];
 		return types[Math.floor(Math.random()*6)];
 }
 
+///////////// TRANSITION FUNCTIONS
+
+/**
+ * startTurn(drawerIdx)
+ *
+ * Starts a players turn.
+ * Draws turn text.
+ */
+PictionaryModel.prototype.startTurn = function(drawerIdx) {
+		this.drawerIdx = drawerIdx;
+		this.currentCategory = this.getCardType();
+		this.changeState(STATE.START);
+}
+/**
+ * startDrawing()
+ *
+ * Starts a player drawing. Starts the timer, updates the UI, unlocks canvas.
+ */
+PictionaryModel.prototype.startDrawing = function() {
+		this.changeState(STATE.DRAWING);
+		this.startTimeMs = nowMs();
+		this.startTimer();
+}
+/**
+ * gotItClicked()
+ *
+ * Called when Got It is clicked, shows the player buttons, stops the timer.
+ */
+PictionaryModel.prototype.gotItClicked = function() {
+		this.changeState(STATE.SOMEONE_WON);
+}
+/**
+ * timeUp()
+ *
+ * Called when time runs out. Removes points for the drawer, updates UI.
+ */
+PictionaryModel.prototype.timeUp = function() {
+		this.winningPlayer = false;
+		this.changeState(STATE.INPUT_ANSWER);
+}
+
+/**
+ * resumeDrawing()
+ *
+ * Resumes drawing at the time the timer was at.
+ */
+PictionaryModel.prototype.resumeDrawing = function(timeLeft) {
+		this.startTimeMs = nowMs() - (MAX_TIME - this.timeLeft) * 1000;
+		this.changeState(STATE.DRAWING);
+		this.startTimer()
+}
+/**
+ * playerWon(playerName)
+ *
+ * Called when a player wins. Adds points, updates the UI.
+ */
+PictionaryModel.prototype.playerWon = function(name) {
+		if (name == this.getCurrentDrawer()) {
+				this.fireEvent(new PictionaryModelEvent(
+						PictionaryModelEvent.MESSAGE, {'level':MessageLevel.WARNING,
+																					 'text': "Drawing player cannot win"}));
+				return;
+		}
+		this.winningPlayer = name;
+		this.changeState(STATE.INPUT_ANSWER);
+}
 /**
  * nextDrawing()
  *
@@ -55,19 +141,19 @@ PictionaryModel.prototype.nextDrawing = function() {
 		this.startTurn(this.drawerIdx);
 }
 
-/**
- * startTurn(drawerIdx)
- *
- * Starts a players turn.
- * Draws turn text.
- */
-PictionaryModel.prototype.startTurn = function(drawerIdx) {
-		this.state = STATE.START;
-		this.canvasApp.clear();
-		this.drawerIdx = drawerIdx;
-		this.canvasApp.drawStatusText(this.players[drawerIdx], this.getCardType());
-		this.canvasApp.setUiForState(this.state);
+///////////// UTILITY FUNCTIONS
+
+PictionaryModel.prototype.fireEvent = function(event) {
+		var evt = document.createEvent("MessageEvent");
+		evt.initMessageEvent("MessageEvent", true, true, event);
+		this.root.dispatchEvent(evt);
+		log(evt);
 }
+
+PictionaryModel.prototype.changeState = function(state) {
+		this.state = state;
+		this.fireEvent(new PictionaryModelEvent(PictionaryModelEvent.STATE_CHANGE, {'state': state}));
+};
 
 /**
  * timerEvent()
@@ -80,9 +166,12 @@ PictionaryModel.prototype.timerEvent = function() {
 				// Once we leave the timer state, ignore timer events.
 				return;
 		}
-		this.timeLeft = MAX_TIME - ((nowMs() - this.startTimeMs) / 1000);
-		this.canvasApp.setTimeLeft(this.timeLeft);
-
+		var newTimeLeft = MAX_TIME - ((nowMs() - this.startTimeMs) / 1000);
+		if (int(this.timeLeft) != int(newTimeLeft)) {
+				this.fireEvent(new PictionaryModelEvent(
+						PictionaryModelEvent.TIMER_UPDATE, {'time': newTimeLeft}));
+		}
+		this.timeLeft = newTimeLeft
 		if (this.timeLeft <= 0) {
 				this.timeUp();
 		} else {
@@ -90,116 +179,9 @@ PictionaryModel.prototype.timerEvent = function() {
 		}
 }
 
-/**
- * Tell the UI to update. (probably should dispatch events)
- *
- */
-PictionaryModel.prototype.redraw = function() {
-		this.canvasApp.setUiForState(this.state);
-		this.canvasApp.updateScoreUi(this.scores);
-		this.canvasApp.drawScoreText(this.players, this.scores);
-		this.canvasApp.message(null, "");
-}
-
 PictionaryModel.prototype.startTimer = function() {
 		var t = this
 		setTimeout(function() {t.timerEvent()}, 9);
-}
-
-PictionaryModel.prototype.setWinningPlayer = function(name) {
-		if (!name) {
-				this.canvasApp.setWinningPlayerLabel("Nobody")
-		} else {
-				this.canvasApp.setWinningPlayerLabel(name)
-		}
-		this.winningPlayer = name;
-}
-
-/**
- * timeUp()
- *
- * Called when time runs out. Removes points for the drawer, updates UI.
- */
-PictionaryModel.prototype.timeUp = function() {
-		this.setWinningPlayer(false);
-		this.state = STATE.INPUT_ANSWER;
-		this.canvasApp.canDraw = false;
-		this.redraw();
-}
-
-/**
- * someoneWon()
- *
- * Called when Got It is clicked, shows the player buttons, stops the timer.
- */
-PictionaryModel.prototype.gotItClicked = function() {
-		this.state = STATE.SOMEONE_WON;
-		this.canvasApp.canDraw = false;
-		this.redraw();
-}
-
-/**
- * startDrawing()
- *
- * Starts a player drawing. Starts the timer, updates the UI, unlocks canvas.
- */
-PictionaryModel.prototype.startDrawing = function() {
-		this.state = STATE.DRAWING;
-		this.canvasApp.canDraw = true;
-		this.startTimeMs = nowMs();
-		this.startTimer();
-		this.redraw();
-}
-
-/**
- * resumeDrawing()
- *
- * Resumes drawing at the time the timer was at.
- */
-PictionaryModel.prototype.resumeDrawing = function(timeLeft) {
-
-		this.startTimeMs = nowMs() - (MAX_TIME - this.timeLeft) * 1000;
-		this.state = STATE.DRAWING;
-		this.canvasApp.canDraw = true;
-		this.startTimer()
-		this.redraw();
-}
-
-/**
- * getCurrentDrawer()
- *
- * Returns player whos is currently drawing.
- */
-PictionaryModel.prototype.getCurrentDrawer = function() {
-		return this.players[this.drawerIdx];
-}
-
-/**
- * addWinnerPoints(playerName)
- *
- * Updates scores after a player has won.
- * 2 to player name passed in, 1 to current drawer.
- */
-PictionaryModel.prototype.addWinnerPoints = function(name) {
-		if (!(name in this.scores)) {
-				this.scores[name] = 0;
-		}
-		this.redraw();
-}
-
-/**
- * playerWon(playerName)
- *
- * Called when a player wins. Adds points, updates the UI.
- */
-PictionaryModel.prototype.playerWon = function(name) {
-		if (name == this.getCurrentDrawer()) {
-				this.canvasApp.message(MessageLevel.WARNING, "Drawing player cannot win");
-				return;
-		}
-		this.state = STATE.INPUT_ANSWER;
-		this.setWinningPlayer(name);
-		this.redraw();
 }
 
 PictionaryModel.prototype.finishRound = function() {
@@ -209,77 +191,16 @@ PictionaryModel.prototype.finishRound = function() {
 		} else {
 				this.scores[this.getCurrentDrawer()] -= 1;
 		}
-		var imageData = this.canvasApp.getImageData();
-		var answer = this.canvasApp.getAnswer();
-		var filename = answer + "-" + this.getCurrentDrawer() + ".png";
-		var drawer = this.getCurrentDrawer();
-		var winner = this.winningPlayer;
-		saveImage(this.sessionKey, imageData, filename, function(imageHash) {
-				var data = {'drawer': drawer,
-										'winner':winner,
-										'imageHash':imageHash,
-										'answer': answer
-									 }
-				logTurn(this.sessionKey, data);
-		});
 
-		this.redraw();
 		this.nextDrawing();
-		this.canvasApp.message(null, "");
-}
-
-/**
- * keyboardHandler(event)
- *
- * Handlers and farms out keyboard events.
- */
-/*
-
-}
-
-
-PictionaryModel.prototype.keyAction = function() {
-*/
-PictionaryModel.prototype.keyboardHandler = function(event) {
-		window.console.log(event);
- 		switch(this.state) {
-		case STATE.START:
-				if (event.keyCode in {13:'',32:''}) {
-						this.startDrawing();
-				}
-				break;
-		case STATE.DRAWING:
-				if (event.keyCode in {13:'',32:''}) {
-						this.gotItClicked();
-				}
-				break;
-		case STATE.SOMEONE_WON:
-				if (event.keyCode >= 48 && event.keyCode <= 57) {
-						var playerIdx = event.keyCode - 49;
-						if (playerIdx == -1) {
-								playerIdx = 10;
-						}
-						if (playerIdx >= this.players.length) {
-								this.resumeDrawing();
-						} else {
-								this.playerWon(this.players[playerIdx]);
-						}
-				}
-				break;
-		case STATE.INPUT_ANSWER:
-				if (event.keyCode in {13:''}) {
-						this.finishRound();
-				}
-				break;
-		}
 }
 
 /////////////////////////////////////////////////////////
 
-function CanvasApp() {
+function CanvasApp(pModel) {
 		this.canvas = document.getElementById("main");
 		this.context = this.canvas.getContext("2d");
-		this.canDraw = false;
+		this.pModel = pModel;
 		this.setTimeLeft(MAX_TIME);
 }
 
@@ -296,6 +217,15 @@ CanvasApp.prototype.setTimeLeft = function(timeLeft) {
 		document.getElementById("timeLeft").innerHTML = Math.ceil(timeLeft);
 };
 
+/**
+ * Tell the UI to update. (probably should dispatch events)
+ *
+ */
+CanvasApp.prototype.redraw = function() {
+		this.updateScoreUi(this.pModel.players, this.pModel.scores);
+		this.message(null, "");
+}
+
 CanvasApp.prototype.updateScoreUi = function(scores) {
 
 };
@@ -308,8 +238,8 @@ CanvasApp.prototype.clear = function() {
 };
 
 CanvasApp.prototype.drawLineToEvent = function(event) {
-		context.lineTo(lastEvent.clientX, lastEvent.clientY);
-		context.stroke();
+		this.context.lineTo(lastEvent.clientX, lastEvent.clientY);
+		this.context.stroke();
 };
 
 CanvasApp.prototype.setPenActive = function(isActive) {
@@ -317,7 +247,7 @@ CanvasApp.prototype.setPenActive = function(isActive) {
 };
 
 CanvasApp.prototype.isPenActive = function() {
-		return this.isMouseDown && this.canDraw;
+		return this.isMouseDown && this.pModel.state == STATE.DRAWING;
 };
 
 CanvasApp.prototype.mouseMove = function(event) {
@@ -333,7 +263,7 @@ CanvasApp.prototype.mouseUp = function(event) {
 
 CanvasApp.prototype.mouseDown = function(event) {
 		lastEvent = event;
-		context.moveTo(event.clientX, event.clientY);
+		this.context.moveTo(event.clientX, event.clientY);
 		this.setPenActive(true);
 };
 
@@ -343,15 +273,19 @@ CanvasApp.prototype.mouseOver = function(event) {
 		}
 }
 
+CanvasApp.prototype.fireEvent = function(event) {
+		var evt = document.createEvent("MessageEvent");
+		evt.initMessageEvent("MessageEvent", true, true, event);
+		this.root.dispatchEvent(evt);
+}
+
 CanvasApp.prototype.mouseOut = function(event) {
 		this.setPenActive(false);
 };
 
-
 CanvasApp.prototype.setWinningPlayerLabel = function(name) {
 		document.getElementById("winningPlayerLabel").innerHTML = name + " won"
 };
-
 
 CanvasApp.prototype.drawStatusText = function (player, cardType) {
 		this.context.font = "12pt Helvetica";
@@ -360,11 +294,7 @@ CanvasApp.prototype.drawStatusText = function (player, cardType) {
 										 20);
 };
 
-CanvasApp.prototype.message = function(messageLevel, messageText) {
-		message(messageLevel, messageText)
-}
-
-CanvasApp.prototype.drawScoreText = function(players, scores) {
+CanvasApp.prototype.updateScoreUI = function(players, scores) {
 		var scoreBar = document.getElementById("scoreBar");
 		while(scoreBar.firstChild) {
 				scoreBar.removeChild(scoreBar.firstChild);
@@ -379,82 +309,7 @@ CanvasApp.prototype.drawScoreText = function(players, scores) {
 };
 
 CanvasApp.prototype.setUiForState = function(state) {
-		setUiForState(state);
-}
-
-function message(messageLevel, messageText) {
-		var statusField = document.getElementById("statusMessage");
-		switch (messageLevel) {
-		case MessageLevel.ERROR:
-				statusField.style.color = "red";
-				break;
-		case MessageLevel.WARNING:
-				statusField.style.color = "orange";
-				break;
-		case MessageLevel.OK:
-				statusField.style.color = "green";
-				break;
-		}
-		statusField.innerHTML = messageText;
-}
-
-function createButton(pModel, name, index) {
-		newButton = document.createElement("div");
-		newButton.innerHTML = name;
-		newButton.className = "playerButton"
-		newButton.name = name;
-		if (typeof index != "undefined" ) {
-				indexLabel = document.createElement("span");
-				indexLabel.className = "indexLabel"
-				indexLabel.innerHTML = "(" + (index - - 1) + ")";
-				newButton.appendChild(indexLabel);
-		}
-
-		return newButton;
-}
-
-function initUI(players, pModel) {
-		buttonBar = document.getElementById("buttonBar");
-		var playerIdx = 0;
-		for (playerIdx=0; playerIdx < players.length; ++playerIdx) {
-				var name = players[playerIdx];
-				var button = createButton(pModel, name, playerIdx)
-				button.onclick = function() {
-						pModel.playerWon(this.name);
-				};
-				buttonBar.appendChild(button);
-		}
-
-		var button = createButton(pModel, "Back", (playerIdx))
-		button.onclick = function() { pModel.resumeDrawing() };
-		buttonBar.appendChild(button);
-
-		document.getElementById("startDrawing").onclick = function() {pModel.startDrawing()};
-		document.getElementById("saveButton").onclick = function() {pModel.finishRound()};
-		document.getElementById("gotItButton").onclick = function() {pModel.gotItClicked()};
-		document.getElementById("changePlayerButton").onclick = function() {pModel.gotItClicked()};
-		document.getElementById("changePlayerButton").onkeypress = function(event) {
-				if (event.keyCode in {13:'', 32:''}) {
-						pModel.gotItClicked()
-				}
-		};
-}
-
-function setElementDisplay(elementName, active) {
-		var bar = document.getElementById(elementName);
-		if (active) {
-				bar.style.display = "block";
-		} else {
-				bar.style.display = "none";
-		}
-}
-
-function setPlayerButtonDisplay(active) {
-		setElementDisplay("buttonBar", active);
-}
-
-function setUiForState(state) {
-		bars = document.getElementsByClassName("statefulBar");
+		bars = this.document.getElementsByClassName("statefulBar");
 		for (var i=0; i < bars.length; i++) {
 				elementIdx = i;
 				var elem = bars[elementIdx];
@@ -481,30 +336,77 @@ function setUiForState(state) {
 		}
 }
 
-function main() {
-		var players = PLAYERS;
-
-		var canvasApp = new CanvasApp();
-		var pModel = new PictionaryModel(players, canvasApp);
-
-		document.pModel = pModel;
-
-		var canvas = document.getElementById("main");
-		context = canvas.getContext('2d');
-		initUI(players, pModel);
-
-
-		document.getElementById("main").addEventListener('mousemove', function(event) { canvasApp.mouseMove(event) }, false);
-		document.getElementById("main").addEventListener('mouseup', function(event) { canvasApp.mouseUp(event) }, false);
-		document.getElementById("main").addEventListener('mousedown', function(event) { canvasApp.mouseDown(event) }, false);
-		document.getElementById("main").addEventListener('mouseover',function(event) { canvasApp.mouseOver(event) }, false);
-		document.getElementById("main").addEventListener('mouseout', function(event) { canvasApp.mouseOut(event) }, false);
-		document.getElementById("body").addEventListener('keypress', function(event) { pModel.keyboardHandler(event) }, false);
-		setUiForState(pModel.state);
-
-		window.onbeforeunload = function() {
-				return 'Leaving will lose all game state';
+CanvasApp.prototype.initUI = function() {
+		var buttonBar = document.getElementById("buttonBar");
+		var playerIdx = 0;
+		var pModel = this.pModel;
+		for (playerIdx=0; playerIdx < players.length; ++playerIdx) {
+				var name = players[playerIdx];
+				var button = createButton(name, playerIdx)
+				button.onclick = function() {
+						pModel.playerWon(this.name);
+				};
+				buttonBar.appendChild(button);
 		}
+
+		var button = createButton(pModel, "Back", (playerIdx))
+		button.onclick = function() { pModel.resumeDrawing() };
+		buttonBar.appendChild(button);
+
+		document.getElementById("startDrawing").onclick = function() {this.pModel.startDrawing()};
+		document.getElementById("saveButton").onclick = function() {pModel.finishRound()};
+		document.getElementById("gotItButton").onclick = function() {pModel.gotItClicked()};
+		document.getElementById("changePlayerButton").onclick = function() {pModel.gotItClicked()};
+		document.getElementById("changePlayerButton").onkeypress = function(event) {
+				if (event.keyCode in {13:'', 32:''}) {
+						pModel.gotItClicked()
+				}
+		};
+}
+
+CanvasApp.prototype.message = function(messageLevel, messageText) {
+		var statusField = document.getElementById("statusMessage");
+		switch (messageLevel) {
+		case MessageLevel.ERROR:
+				statusField.style.color = "red";
+				break;
+		case MessageLevel.WARNING:
+				statusField.style.color = "orange";
+				break;
+		case MessageLevel.OK:
+				statusField.style.color = "green";
+				break;
+		}
+		statusField.innerHTML = messageText;
+}
+
+CanvasApp.prototype.createButton = function(name, index, action) {
+		newButton = document.createElement("div");
+		newButton.innerHTML = name;
+		newButton.className = "playerButton"
+		newButton.name = name;
+		if (typeof index != "undefined" ) {
+				indexLabel = document.createElement("span");
+				indexLabel.className = "indexLabel"
+				indexLabel.innerHTML = "(" + (index - - 1) + ")";
+				newButton.appendChild(indexLabel);
+		}
+		newButton.onclick = function() { this.fireEvent(new ButtonClickedEvent(action)) };
+
+		return newButton;
+}
+
+function setElementDisplay(elementName, active) {
+		var bar = document.getElementById(elementName);
+		if (active) {
+				bar.style.display = "block";
+		} else {
+				bar.style.display = "none";
+		}
+}
+
+function setPlayerButtonDisplay(active) {
+		setElementDisplay("buttonBar", active);
 }
 
 function handler(client, callback) {
@@ -539,4 +441,89 @@ function logTurn(sessionKey, data) {
 		client.setRequestHeader("Content-Size", data.length)
 		client.setRequestHeader("X-Session-Key", sessionKey);
 		client.send(data);
+}
+
+function PictionaryController(root, canvas) {
+
+		pModel = this.pModel = new PictionaryModel(root, PLAYERS);
+		canvasApp = this.canvasApp = new CanvasApp(root, this.pModel);
+		this.root = root;
+		this.players = PLAYERS;
+		var t = this;
+
+		canvas.addEventListener('mousemove', function(event) { canvasApp.mouseMove(event) }, false);
+		canvas.addEventListener('mouseup', function(event) { canvasApp.mouseUp(event) }, false);
+		canvas.addEventListener('mousedown', function(event) { canvasApp.mouseDown(event) }, false);
+		canvas.addEventListener('mouseover',function(event) { canvasApp.mouseOver(event) }, false);
+		canvas.addEventListener('mouseout', function(event) { canvasApp.mouseOut(event) }, false);
+
+		root.addEventListener('keypress', function(event) { t.keyboardHandler(event) }, false);
+
+		this.root.addEventListener('onmessage', function(event) {
+				log(event)});
+
+		pModel.startTurn(0);
+
+
+		window.onbeforeunload = function() {
+				return 'Leaving will lose all game state';
+		}
+}
+
+PictionaryController.prototype.keyboardHandler = function(event) {
+ 		switch(this.pModel.state) {
+		case STATE.START:
+				if (event.keyCode in {13:'',32:''}) {
+						this.pModel.startDrawing();
+				}
+				break;
+		case STATE.DRAWING:
+				if (event.keyCode in {13:'',32:''}) {
+						this.pModel.gotItClicked();
+				}
+				break;
+		case STATE.SOMEONE_WON:
+				if (event.keyCode >= 48 && event.keyCode <= 57) {
+						var playerIdx = event.keyCode - 49;
+						if (playerIdx == -1) {
+								playerIdx = 10;
+						}
+						if (playerIdx >= this.players.length) {
+								this.pModel.resumeDrawing();
+						} else {
+								this.pModel.playerWon(this.players[playerIdx]);
+						}
+				}
+				break;
+		case STATE.INPUT_ANSWER:
+				if (event.keyCode in {13:''}) {
+						this.finishRound();
+				}
+				break;
+		}
+}
+
+PictionaryController.prototype.finishRound = function() {
+		pModel.finishRound();
+
+		var imageData = this.canvasApp.getImageData();
+		var answer = this.canvasApp.getAnswer();
+		var drawer = this.pModel.getCurrentDrawer();
+		var winner = this.pModel.getWinningPlayer();
+		var filename = answer + "-" + drawer + ".png";
+		saveImage(this.sessionKey, imageData, filename, function(imageHash) {
+				var data = {'drawer': drawer,
+										'winner':winner,
+										'imageHash':imageHash,
+										'answer': answer
+									 }
+				logTurn(this.sessionKey, data);
+		});
+}
+
+
+function main() {
+		var canvas = document.getElementById("main");
+		var root = document.getElementById("body");
+		var pc = new PictionaryController(root, canvas);
 }
