@@ -1,0 +1,43 @@
+<html>
+<head>
+
+<link rel="stylesheet" href="pictionary.css" type="text/css"></link>
+<script type="text/javascript" src="pictionary.js"></script>
+
+</head>
+<body onload="main()" id="body">
+	<div width="1000px">
+		<div>
+			<canvas width = "1000px"  height="600px"  id="main"></canvas>
+		</div>
+		<div id="ui">
+			<div class="statefulBar" id="drawingBar" >
+				<div class="barText">Time Left: </div><div class="barText" id="timeLeft"></div>
+				<div class="longButton" style="width:500px" id="gotItButton">Got It!</div>
+			</div>
+		</div>
+		<div class="statefulBar" id="buttonBar" >
+		</div>
+		<div class="statefulBar" id="waitForDraw">
+			<div class="playerButton" id="startDrawing">Start</div>
+		</div>
+		<div class="statefulBar" id="inputAnswer">
+			<div class="barText" id="winningPlayerLabel"></div>
+			<input id="answer" tabindex=1 />
+			<div class="playerButton" id="saveButton" tabindex=2>Save</div>
+			<div class="playerButton" id="changePlayerButton" tabindex=3>Change Winner</div>
+		</div>
+	</div>
+</div>
+<div id="scoreBar" style="clear:left">
+</div>
+<div id="statusMessage" style="clear:left">
+</div>
+
+</body>
+</html>
+<!--
+
+				<span style="text-decoration:underline">C</span>
+
+				-->
