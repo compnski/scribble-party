@@ -1,73 +1,79 @@
 .playerButton {
-		font: 18px Helvetica;
-		border: 1px solid;
-		padding: 5 25 5 25;
-		margin-right: 10px;
-		float: left;
-		height: 20px;
-		box-shadow: 3px 3px 1px #888888;
+    font: 18px Helvetica;
+    border: 1px solid;
+    padding: 5 25 5 25;
+    margin-right: 10px;
+    height: 20px;
+    box-shadow: 3px 3px 1px #888888;
+    display: inline-block;
 }
 
 .longButton {
-		font: 18px Helvetica;
-		float:left;
-		border: 1px solid;
-		padding: 5 10 5 10;
-		margin-left: 10px;
-		box-shadow: 3px 3px 1px #888888;
+    font: 18px Helvetica;
+    border: 1px solid;
+    padding: 5 10 5 10;
+    margin-left: 10px;
+    box-shadow: 3px 3px 1px #888888;
+    display: inline-block;
 }
 
 .barText {
-		font: 18px Helvetica;
-		float:left;
-		padding: 5 0 5 0;
+    font: 18px Helvetica;
+    padding: 5 0 5 0;
+    display: inline-block;
 }
 
 .scoreText {
-		font: 18px Helvetica;
-		float:left;
-		padding: 5 0 5 25;
+    font: 18px Helvetica;
+    padding: 5 0 5 25;
+    display: inline-block;
 }
 
-.indexLabel {
-		font: 10px Helvetica;
-		vertical-align:top;
-		margin-bottom: 10px;
+.keyShortcutLabel {
+    font: 10px Helvetica;
+    vertical-align:top;
+    margin-bottom: 10px;
 }
 
 #buttonBar {
-		margin-left: 150px;
+    margin-left: 150px;
 }
 
 canvas {
-		border: 1px solid;
-		margin-bottom: 5px;
+    border: 1px solid;
+    margin-bottom: 5px;
 }
 
 .statefulBar {
-		display: none;
+    display: none;
 }
 
 #timeLeft {
-		margin-left: 5px;
+    margin-left: 5px;
 }
 
 input {
-#		margin-top: 1px;
-		padding: 5 25 5 25;
-		font: 18px Helvetica;
+    padding: 5 25 5 25;
+    font: 18px Helvetica;
 }
 
 #answer {
-		width: 350px;
-		float: left;
-		margin-right: 10px;
+    width: 350px;
+    margin-right: 10px;
+    display: inline-block;
 }
 
 #winningPlayerLabel {
-		margin-right: 5px;
+    margin-right: 5px;
 }
 
-#statusMessage {
-		font: 28px Helvetica;
+#statusField {
+    font: 28px Helvetica;
+}
+
+#largeTimeLeftLabel {
+    font: 72pt Helvetica;
+    display: inline-block;
+    vertical-align: top;
+    margin-right: 10px;
 }

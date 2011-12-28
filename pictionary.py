@@ -23,6 +23,21 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer): pa
 
 
 
+def guessContentType(filename):
+    ext = os.path.splitext(filename)[1]
+    print ext
+    if ext == ".html":
+        return 'text/html'
+    if ext == ".js":
+        return 'application/x-javascript'
+    if ext == ".css":
+        return 'text/css'
+    if ext == ".coffee":
+        return 'text/coffeescript'
+    else:
+        return "application/xml"
+
+
 class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
     _staticFileMap = {}
     def do_GET(self):
@@ -33,10 +48,20 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
             return self.handleStaticFile(filename)
 
         if getattr(self, "handle_%s" % filename, None):
-            print >>self.wfile, getattr(self, "handle_%s" % filename)()
+            data = getattr(self, "handle_%s" % filename)()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/xml')
+            response = getattr(self, "handle_%s" % filename)()
+            self.end_headers()
+            self.wfile.write(response)
             return
-
         self.send_error(404)
+
+    def handle_coffeeMain(self):
+        print self.path
+        import os
+        coffeeScripts = os.listdir("coffee/")
+        print coffeeScripts
 
     @classmethod
     def reloadFile(cls, filename, path, lastMod):
@@ -49,7 +74,10 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
             lastMod = os.stat(filename)[stat.ST_MTIME]
             if lastMod > cacheLastMod:
                 self.reloadFile(filename, path, lastMod)
-            print >>self.wfile, CustomHTTP._staticFileMap[filename][2]
+            self.send_response(200)
+            self.send_header('Content-Type', guessContentType(filename))
+            self.end_headers()
+            self.wfile.write(CustomHTTP._staticFileMap[filename][2])
         except OSError:
             pass
 
@@ -60,7 +88,11 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
         filename = os.path.basename(self.path)
 
         if getattr(self, "handle_%s" % filename):
-            print >>self.wfile, getattr(self, "handle_%s" % filename)()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/xml')
+            response = getattr(self, "handle_%s" % filename)()
+            self.end_headers()
+            self.wfile.write(response)
             return
         self.send_error(404)
 
@@ -71,6 +103,7 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
         data = json.loads(data)
         with open("logs/%s.log" % sessionKey, "a") as sessionLog:
             print >>sessionLog, data
+        return "<ok/>"
 
     def handle_saveImage(self):
         filename = self.headers['X-Image-Filename']
@@ -113,7 +146,8 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
 
 
 def loadFiles():
-    files = ['pictionary.css','pictionary.js','pictionary.html','favicon.ico']
+    files = ['pictionary.css','pictionary.js','pictionary.html',
+             'pictionary.coffee','favicon.ico', 'remote.html', 'remote.coffee']
     for filename in files:
         try:
             lastMod = os.stat(filename)[stat.ST_MTIME]
