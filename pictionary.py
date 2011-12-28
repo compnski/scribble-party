@@ -61,7 +61,18 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
         print self.path
         import os
         coffeeScripts = os.listdir("coffee/")
-        print coffeeScripts
+        coffeeScripts.sort()
+        scripts = [open("coffee/" + script, "r").read() for script in coffeeScripts]
+        scripts.append("main()")
+        return "\n".join(scripts)
+
+    def handle_coffeeRemote(self):
+        print self.path
+        import os
+        coffeeScripts = os.listdir("coffee/")
+        scripts = [open(script, "r").read() for script in coffeeScripts]
+        scripts.append("remote()")
+        return "\n".join(scripts)
 
     @classmethod
     def reloadFile(cls, filename, path, lastMod):

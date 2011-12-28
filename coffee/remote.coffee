@@ -21,4 +21,5 @@ class RemoteUI
     @drawerLabel.innerHTML = @drawer
 
 
-remoteUi = new RemoteUI("secret", document, () -> 5)
+remote = () ->
+  remoteUi = new RemoteUI("secret", document, () -> 5)
