@@ -1,0 +1,66 @@
+<html>
+<head>
+<title>Pictionary Remote</title>
+<style>
+.button {
+    font: 72pt Helvetica;
+    border: 1px solid;
+    padding: 5 25 5 25;
+    margin-right: 10px;
+    box-shadow: 3px 3px 1px #888888;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    vertical-align: text-top;
+
+}
+.label {
+    line-height: 72px;
+    font: 32pt Helvetica;
+    border: 1px solid;
+    padding: 5 25 5 25;
+    margin-right: 10px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+}
+#secretLabel {
+   width: 80%;
+   height: 115px;
+}
+
+#revealSecretButton {
+    width: 75%;
+    margin-top: 40px;
+}
+
+#correctGuess {
+   width: 75%;
+   height: 25%;
+   margin-top: 40px;
+   padding-top: 10px;
+   vertical-align: middle;
+}
+
+.barText {
+    font: 18px Helvetica;
+    padding: 5 0 5 0;
+    display: inline-block;
+}
+
+</style>
+<script src="http://jashkenas.github.com/coffee-script/extras/coffee-script.js" type="text/javascript" charset="utf-8"></script>
+<script type="text/coffeescript" src="remote.coffee">
+</script>
+</head>
+<body>
+	<div>
+  <div id="statusBar">
+		<div class="barText" id="drawerLabel">Nobody </div>
+		<div class="barText"> is drawing.</div>
+  </div>
+	<div id="secretLabel" class="label">&nbsp;</div>
+	<div id="revealSecretButton" class="button">Reveal</div>
+	<div id="correctGuess" class="button">Got It!</div>
+	</div>
+</body>
