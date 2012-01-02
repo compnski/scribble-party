@@ -15,7 +15,7 @@ class PictionaryRound
 
   constructor: (@category, @secret, @drawer, @stateChangeCallback) ->
 
-  startDrawing: =>
+  startDrawing: (@secret = "") =>
     @_startTimer(PictionaryRound.roundTime)
     @_changeState(STATE.DRAWING)
 
@@ -95,6 +95,9 @@ class PictionaryGame
 # The controller for Pictionary. This class handles most UI inputs events
 # and owns all the other classes.
 class PictionaryController
+  # If connected mode is true, then sync round start to the server
+  # so the remote client can get the secret.
+  connectedMode: true
   finishRound: () =>
     #saveImage
     # logRoundStats
@@ -103,26 +106,63 @@ class PictionaryController
     drawer = @pModel.currentRound.drawer;
     winner = @pModel.currentRound.winner;
     filename = answer + '-' + drawer + '.png';
-    @netHandler.saveImage(this.sessionKey, imageData, filename, (response) =>
-      imageHash = response.getElementById('imageHash')?.firstChild?.data
+    @netHandler.saveImage(imageData, filename, (response) =>
+      imageHash = response.imageHash
       data =
         'drawer': drawer
         'winner':winner
         'imageHash':imageHash
         'answer': answer
-      @netHandler.logTurn(this.sessionKey, data))
+      @netHandler.logTurn(data))
     @pModel.finishRound()
+    @newRound()
+
+  newRound: =>
+    if @connectedMode
+      roundData =
+        drawer: @pModel.currentRound.drawer
+        category: @pModel.currentRound.category
+        players: @pModel.players
+      @netHandler.roundStart(roundData, @lastUpdateTs, @gotRoundStart)
+
+  waitForNetData: =>
+    @netHandler.waitForData(@lastUpdateTs, @netDataHandler, @netErrorHandler)
+
+  netDataHandler: (data) =>
+    window.console.log("netDataHandler")
+    window.console.log(data)
+    {round, @lastUpdateTs} = data
+    if round.state != @pModel.getState()
+      switch round.state
+        when STATE.DRAWING then @startDrawing()
+        when STATE.CORRECT_GUESS then @pModel.correctGuess()
+    @waitForNetData()
+
+  netErrorHandler: (client, data) =>
+    if client.status == 204 #NO-OP
+      @waitForNetData()
+      return
+    @ui.message(MessageLevel.ERROR, "Error syncing with server")
+    #@connectedMode = false
 
   playerWon: (playerName) =>
     if not @pModel.playerWon(playerName)
       @ui.message(MessageLevel.WARNING, 'Drawer cannot win')
+
+  startDrawing: =>
+      @pModel.startDrawing()
+
+  gotRoundStart: (data) =>
+    @lastUpdateTs = data.lastUpdateTs
+    window.console.log(data)
+    @pModel.currentRound.secret = data.round.secret
 
   buttonClickCallback: (target) =>
     [_, playerName, _...] = target.match(/player_(\w+)/) ? []
     if playerName
       @playerWon(playerName)
     switch target
-      when 'startDrawing' then @pModel.startDrawing()
+      when 'startDrawing' then @startDrawing()
       when 'gotItButton' then @pModel.correctGuess()
       when 'back' then @pModel.resumeDrawing()
       when 'saveButton' then @finishRound()
@@ -137,9 +177,11 @@ class PictionaryController
     @pModel = new PictionaryGame(@PLAYERS, @stateChangeCallback)
     @ui = new PictionaryUI(@pModel, document, @buttonClickCallback)
     @ui.initUi()
-    @netHandler = new NetHelper(@ui.message)
+    @netHandler = new NetHelper("12",@ui.message)
+    @waitForNetData()
     window.onbeforeunload = () -> 'Leaving will lose all game state'
     document.addEventListener('keypress', @keyboardHandler)
+    @newRound()
 
   keyboardHandler: (event) =>
     switch @pModel.getState()

@@ -10,8 +10,13 @@ import base64
 import hashlib
 import json
 import stat
+import urlparse
+from sessionmanager import SessionManager
 
+TIMEOUT = 180
 PORT = 8000
+
+sessionManager = SessionManager()
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     def handle(self):
@@ -20,7 +25,6 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         response = "{}: {}".format(cur_thread.name, data)
         self.request.send(response)
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer): pass
-
 
 
 def guessContentType(filename):
@@ -37,40 +41,31 @@ def guessContentType(filename):
     else:
         return "application/xml"
 
-
 class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
     _staticFileMap = {}
     def do_GET(self):
         filename = os.path.basename(self.path)
+        filename = filename.split("?")[0]
         print self.path, filename
 
         if filename in CustomHTTP._staticFileMap:
             return self.handleStaticFile(filename)
+        self.do_POST()
 
-        if getattr(self, "handle_%s" % filename, None):
-            data = getattr(self, "handle_%s" % filename)()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/xml')
-            response = getattr(self, "handle_%s" % filename)()
-            self.end_headers()
-            self.wfile.write(response)
-            return
-        self.send_error(404)
-
-    def handle_coffeeMain(self):
-        print self.path
+    def getCoffeeScripts(self):
         import os
         coffeeScripts = os.listdir("coffee/")
         coffeeScripts.sort()
-        scripts = [open("coffee/" + script, "r").read() for script in coffeeScripts]
+        scripts = [open("coffee/" + script, "r").read() for script in coffeeScripts if os.path.exists("coffee/" + script)]
+        return scripts
+
+    def handle_coffeeMain(self):
+        scripts = self.getCoffeeScripts()
         scripts.append("main()")
         return "\n".join(scripts)
 
     def handle_coffeeRemote(self):
-        print self.path
-        import os
-        coffeeScripts = os.listdir("coffee/")
-        scripts = [open(script, "r").read() for script in coffeeScripts]
+        scripts = self.getCoffeeScripts()
         scripts.append("remote()")
         return "\n".join(scripts)
 
@@ -97,35 +92,20 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_POST(self):
         filename = os.path.basename(self.path)
+        filename = filename.split("?")[0]
+        print self.path, filename
 
-        if getattr(self, "handle_%s" % filename):
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/xml')
+        if getattr(self, "handle_%s" % filename, False):
             response = getattr(self, "handle_%s" % filename)()
+            if response is None:
+                return
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', len(response))
             self.end_headers()
             self.wfile.write(response)
             return
         self.send_error(404)
-
-    def handle_logTurn(self):
-        print int(self.headers['Content-Length'])
-        sessionKey = self.headers.get('X-Session-Key', "nosession")
-        data = self.rfile.read(int(self.headers['Content-Length']))
-        data = json.loads(data)
-        with open("logs/%s.log" % sessionKey, "a") as sessionLog:
-            print >>sessionLog, data
-        return "<ok/>"
-
-    def handle_saveImage(self):
-        filename = self.headers['X-Image-Filename']
-        imageData = self.read_image_helper(self.rfile,
-                                           int(self.headers['Content-Length']))
-        imageHash = hashlib.md5(imageData).hexdigest()
-        self.make_file(filename).write(base64.b64decode(imageData))
-
-        return  """<response>
-<imageHash id="imageHash">%s</imageHash>
-</response>""" % imageHash
 
     def make_file(self, filename):
         if os.path.exists(filename):
@@ -154,6 +134,96 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
                 imageParts.append(data)
         return "".join(imageParts)
 
+    def handle_logTurn(self):
+        print int(self.headers['Content-Length'])
+        sessionKey = self.headers.get('X-Session-Key', "nosession")
+        data = self.rfile.read(int(self.headers['Content-Length']))
+        data = json.loads(data)
+        with open("logs/%s.log" % sessionKey, "a") as sessionLog:
+            print >>sessionLog, data
+        return "[]"
+
+    def handle_saveImage(self):
+        filename = self.headers['X-Image-Filename']
+        imageData = self.read_image_helper(self.rfile,
+                                           int(self.headers['Content-Length']))
+        imageHash = hashlib.md5(imageData).hexdigest()
+        self.make_file(filename).write(base64.b64decode(imageData))
+        return  """{"imageHash":"%s"}""" % imageHash
+
+    @property
+    def cgiParams(self):
+        return urlparse.parse_qs(urlparse.urlparse(self.path).query)
+
+    def handle_secretRevealed(self):
+        sessionKey = self.headers.get('X-Session-Key', None)
+        if not sessionKey:
+            self.send_error(400)
+            return None
+        lastUpdateTs = self.cgiParams.get("lastUpdate", 0)
+        (lastUpdateTs, session) = sessionManager.getSessionData(sessionKey)
+        if session is None:
+            lastUpdateTs, session = sessionManager.create(sessionKey)
+        session.state = "drawing"
+        sessionManager.setSessionData(sessionKey, session)
+
+        ret = dict(round=session.toDict(),
+                   lastUpdateTs=lastUpdateTs)
+        return json.dumps(ret)
+
+    def handle_roundStart(self):
+        sessionKey = self.headers.get('X-Session-Key', None)
+        if not sessionKey:
+            self.send_error(400)
+            return None
+        data = self.rfile.read(int(self.headers['Content-Length']))
+        if not data:
+            self.send_error(400)
+            self.log_error("no data")
+            return None
+
+        data = json.loads(data)
+        lastUpdateTs = self.cgiParams.get("lastUpdate", 0)
+        (lastUpdateTs, session) = sessionManager.getSessionData(sessionKey)
+        if session is None:
+            lastUpdateTs, session = sessionManager.create(sessionKey)
+        session.state = "start"
+        session.drawer = data.get('drawer', [])
+        session.players = data.get('players', [])
+        session.category = data.get('category', None)
+        sessionManager.setSessionData(sessionKey, session)
+
+        ret = dict(round=session.toDict(),
+                   lastUpdateTs=lastUpdateTs)
+        return json.dumps(ret)
+
+    def handle_correctGuess(self):
+        sessionKey = self.headers.get('X-Session-Key', None)
+        if not sessionKey:
+            self.send_error(400)
+            return None
+        lastUpdateTs = self.cgiParams.get("lastUpdate", 0)
+        (updateTime, session) = sessionManager.getSessionData(sessionKey)
+        session.state = "correctguess"
+        sessionManager.setSessionData(sessionKey, session)
+
+        return session.toJson()
+
+    def handle_waitForData(self):
+        sessionKey = self.headers.get('X-Session-Key', None)
+        if not sessionKey:
+            self.send_error(400)
+            return None
+        lastUpdateTs = self.cgiParams.get("lastUpdate", 0)
+        (lastUpdateTs, session) = sessionManager.getSessionData(sessionKey, lastUpdateTs, True, 100)
+        if session is None:
+            print "204 "*10
+            self.send_response(204)
+            return None
+        print lastUpdateTs, session
+        ret = dict(round=session.toDict(),
+                   lastUpdateTs=lastUpdateTs)
+        return json.dumps(ret)
 
 
 def loadFiles():
