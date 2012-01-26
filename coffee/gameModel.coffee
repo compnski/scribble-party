@@ -1,7 +1,7 @@
 ->
   'use strict'
 
-class PictionaryRound
+class GameRound
   category: null
   secret: null
   drawer: null
@@ -16,7 +16,7 @@ class PictionaryRound
   constructor: (@category, @secret, @drawer, @stateChangeCallback) ->
 
   startDrawing: (@secret = "") =>
-    @_startTimer(PictionaryRound.roundTime)
+    @_startTimer(GameRound.roundTime)
     @_changeState(STATE.DRAWING)
 
   correctGuess: =>
@@ -54,7 +54,7 @@ class PictionaryRound
     else
       setTimeout(@_timerHandler, 10) if @state == STATE.DRAWING
 
-class PictionaryGame
+class GameModel
   scores: {}
   players: []
   currentRound: null
@@ -65,7 +65,7 @@ class PictionaryGame
     for player in players
       @scores[player] = 0
     @currentPlayerIdx = (@currentPlayerIdx + 1) % @players.length
-    @currentRound = new PictionaryRound(@getCardType(), '', @players[@currentPlayerIdx],
+    @currentRound = new GameRound(@getCardType(), '', @players[@currentPlayerIdx],
       @stateChangeCallback)
 
   getCardType: -> ['Person/Place/Thing', 'Difficult', 'All Play', 'Object',
@@ -78,7 +78,7 @@ class PictionaryGame
 
   nextTurn: () =>
     @currentPlayerIdx = (@currentPlayerIdx + 1) % @players.length
-    @currentRound = new PictionaryRound(@getCardType(), '', @players[@currentPlayerIdx],
+    @currentRound = new GameRound(@getCardType(), '', @players[@currentPlayerIdx],
       @stateChangeCallback)
     @stateChangeCallback(@currentRound.state)
 
@@ -92,9 +92,9 @@ class PictionaryGame
 
   getState: () => @currentRound.state ? STATE.START
 
-# The controller for Pictionary. This class handles most UI inputs events
+# The controller for Scribble Party. This class handles most UI inputs events
 # and owns all the other classes.
-class PictionaryController
+class GameController
   # If connected mode is true, then sync round start to the server
   # so the remote client can get the secret.
   connectedMode: true
@@ -173,9 +173,9 @@ class PictionaryController
     @ui.message(null, '')
 
   main: () =>
-    @PLAYERS = ['Jason', 'Matt', 'Alex', 'Allison', 'Ganz', 'David'];
-    @pModel = new PictionaryGame(@PLAYERS, @stateChangeCallback)
-    @ui = new PictionaryUI(@pModel, document, @buttonClickCallback)
+    @PLAYERS = PLAYERS
+    @pModel = new GameModel(@PLAYERS, @stateChangeCallback)
+    @ui = new GameUI(@pModel, document, @buttonClickCallback)
     @ui.initUi()
     @netHandler = new NetHelper("12",@ui.message)
     @waitForNetData()
@@ -201,4 +201,4 @@ class PictionaryController
         if event.keyCode in (13) then @finishRound()
 
 main = () ->
-  new PictionaryController().main()
+  new GameController().main()

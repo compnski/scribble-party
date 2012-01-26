@@ -149,7 +149,8 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
                                            int(self.headers['Content-Length']))
         imageHash = hashlib.md5(imageData).hexdigest()
         self.make_file(filename).write(base64.b64decode(imageData))
-        return  """{"imageHash":"%s"}""" % imageHash
+        return json.dumps(dict(imageHash=imageHash))
+#        return  """{"imageHash":"%s"}""" % imageHash
 
     @property
     def cgiParams(self):
@@ -227,8 +228,7 @@ class CustomHTTP(BaseHTTPServer.BaseHTTPRequestHandler):
 
 
 def loadFiles():
-    files = ['pictionary.css','pictionary.js','pictionary.html',
-             'pictionary.coffee','favicon.ico', 'remote.html', 'remote.coffee']
+    files = ['main.css', 'main.html', 'favicon.ico', 'remote.html']
     for filename in files:
         try:
             lastMod = os.stat(filename)[stat.ST_MTIME]

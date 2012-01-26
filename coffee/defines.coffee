@@ -15,3 +15,5 @@ log = (s) => window.console.log(s)
 #alert(screen.availHeight + ', ' + screen.availWidth)
 
 nowMs = () => (new Date()).valueOf()
+
+PLAYERS = ['Jason', 'Alex', 'Matt']

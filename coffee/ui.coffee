@@ -8,6 +8,7 @@ class DrawingSurface
   isMouseDown: false
   _isPenActive: false
   canDrawCallback: -> true
+  @undoStack: []
 
   constructor: (@canvas, @canDrawCallback = -> true) ->
     @context = @canvas.getContext('2d')
@@ -16,6 +17,7 @@ class DrawingSurface
     @canvas.onmouseup = @onMouseUp
     @canvas.onmouseout = @onMouseUp
     @canvas.onmouseover = @onMouseOver
+    @canvas.oncontextmenu = @onContextMenu
 
     #@canvas.addEventListener('touchmove',  @onTouchMove)
     #@canvas.addEventListener('touchstart',  @onTouchStart)
@@ -32,9 +34,11 @@ class DrawingSurface
     @context.fillStyle = 'rgb(255, 255, 255)'
     @context.fillRect(0, 0, @canvas.width, @canvas.height)
     @context.fillStyle = 'rgb(0, 0, 0)'
+    @context.lineWidth = 2
+    @context.line = 'round'
 
   drawStatusText: (text) =>
-    this.context.font = '12pt Helvetica';
+    this.context.font = '12pt Helvetica'
     this.context.fillText(text,
                      10,
                      20);
@@ -54,9 +58,12 @@ class DrawingSurface
   moveToPoint: (point) =>
     @context.moveTo(point.x, point.y)
 
+  onContextMenu: (event) =>
+    false
+
   onTouchMove: (event) =>
     if @isPenActive()
-      @drawLineToPoint(@getCoords(event.touches[event.touches.length-1]))
+      @drawLineToPoxint(@getCoords(event.touches[event.touches.length-1]))
 
   onTouchStart: (event) =>
     @moveToPoint(@getCoords(event.touches[event.touches.length-1]))
@@ -83,6 +90,8 @@ class DrawingSurface
 
   onMouseDown: (event) =>
     @context.moveTo(event.clientX, event.clientY)
+    @context.beginPath()
+    @context.strokeStyle = 'black'
     @isMouseDown = true
     @strokeTimer()
 
@@ -90,7 +99,7 @@ class DrawingSurface
     if event.which
       @onMouseDown(event)
 
-class PictionaryUI
+class GameUI
   root: null
   pModel: null
   drawingSurface: null
@@ -106,7 +115,7 @@ class PictionaryUI
 
   e: (elem) => return @root.getElementById(elem)
 
-  getAnswer: ->
+  getAnswer: =>
     return @answerField.value
 
   updateOnStateChange: =>

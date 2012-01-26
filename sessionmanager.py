@@ -10,7 +10,7 @@ TIMEOUT = 100
 secretList = [('Person', 'George Washington'),
               ('Person', 'Grizzly Bear')]
 
-class PictionarySession:
+class GameSession:
     def __init__(self, sessionKey, players, state = "start"):
         self.sessionKey = sessionKey
         self.players = players
@@ -28,9 +28,8 @@ class PictionarySession:
         return json.dumps(self.toDict())
 
 class SessionManager(object):
-
     def create(self, sessionKey):
-        data = PictionarySession(sessionKey, [])
+        data = GameSession(sessionKey, [])
         return self.setSessionData(sessionKey, data)
 
     def setSessionData(self, sessionKey, session):
